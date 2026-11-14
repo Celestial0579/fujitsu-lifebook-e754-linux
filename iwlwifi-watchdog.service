@@ -3,7 +3,7 @@ Description=Intel 7260 WLAN-Absturz-Waechter (PCI remove/rescan)
 After=systemd-journald.service
 [Service]
 ExecStart=/usr/local/sbin/iwlwifi-watchdog.sh
-Restart=always
+Restart=on-failure
 RestartSec=5
 [Install]
 WantedBy=multi-user.target

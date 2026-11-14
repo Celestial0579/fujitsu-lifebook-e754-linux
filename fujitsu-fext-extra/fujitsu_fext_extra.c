@@ -255,12 +255,23 @@ static ssize_t power_store(struct device *dev, const char *buf, size_t count, u3
 {
 	struct fext_extra *fx = dev_get_drvdata(dev);
 	bool on;
+	u32 v;
 	int ret = kstrtobool(buf, &on);
 
 	if (ret)
 		return ret;
-	ret = fext_call(fx, FUNC_POWER, 1, bit, on ? 0 : bit, NULL);
-	return ret ? ret : count;
+	ret = fext_call(fx, FUNC_POWER, 1, bit, on ? 0 : bit, &v);
+	if (ret)
+		return ret;
+	/*
+	 * S005 liefert den neuen Zustand zurueck. Bleibt das Bit anders als verlangt,
+	 * hat die Firmware abgelehnt. Hinweis: Bei Bluetooth schaltet die Firmware das
+	 * Funkteil (BLON) nur ein, wenn der Hardware-Funkschalter an ist; das zeigt
+	 * rfkill als "hard blocked".
+	 */
+	if (!!(v & bit) == on)
+		return -EIO;
+	return count;
 }
 
 static ssize_t bay_power_show(struct device *d, struct device_attribute *a, char *b)
@@ -302,7 +313,16 @@ static ssize_t raw_call_store(struct device *dev, struct device_attribute *attr,
 	 */
 	if (!fx->raw_ok || !capable(CAP_SYS_RAWIO))
 		return -EPERM;
+	/* Lockdown kann zur Laufzeit verschaerft werden, daher bei jedem Aufruf pruefen */
+	if (security_locked_down(LOCKDOWN_IOPORT))
+		return -EPERM;
 	if (sscanf(buf, "%x %x %x %x", &f, &a1, &a2, &a3) != 4)
+		return -EINVAL;
+	/*
+	 * Nur die Sxxx-Funktionen 0x1000..0x10ff. 0x80000001/2 (I001/I002) uebertragen
+	 * einen Firmware-Puffer an den EC und blockieren FUNC bis zu 2 x 150 s.
+	 */
+	if (f < 0x1000 || f > 0x10ff)
 		return -EINVAL;
 	/* Lock ueber den Aufruf, damit parallele Schreiber ihr raw_last nicht vertauschen */
 	mutex_lock(&fx->lock);

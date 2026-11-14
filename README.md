@@ -34,7 +34,7 @@ Ruft die Firmware-Schnittstelle `\_SB.FEXT.FUNC` (ACPI FUJ02E3) direkt auf und e
 | `…/hwmon/hwmonN/temp2_input` | geglättete Regeltemperatur des EC |
 | `/sys/devices/platform/fujitsu-fext-extra/fan_curve` | Lüfterkurve der Firmware (°C, Stellwert 0–255) |
 | `…/bay_power` | Strom Modulschacht (z. B. DVD-Laufwerk) `0`/`1` |
-| `…/bluetooth_power` | Strom Bluetooth-Controller `0`/`1` |
+| `…/bluetooth_power` | Strom Bluetooth-Controller `0`/`1`. Das Funkteil geht nur an, wenn der Hardware-Funkschalter an ist (sonst zeigt `rfkill` „hard blocked“) |
 
 Beispiel:
 
@@ -48,7 +48,7 @@ echo 0 | sudo tee /sys/devices/platform/fujitsu-fext-extra/bay_power   # DVD aus
 | Parameter | Wirkung |
 |---|---|
 | `force=1` | auch auf anderen Modellen als E754 laden (auf eigene Gefahr, andere LIFEBOOKs mit FUJ02E3 könnten passen) |
-| `allow_raw=1` | Entwickler-Attribut `raw_call`: `echo "<func> <a1> <a2> <a3>" > raw_call; cat raw_call` (Hex). Wirkt **nur ohne Kernel-Lockdown**, also normalerweise nicht bei aktivem Secure Boot, und braucht `CAP_SYS_RAWIO`. |
+| `allow_raw=1` | Entwickler-Attribut `raw_call`: `echo "<func> <a1> <a2> <a3>" > raw_call; cat raw_call` (Hex). Wirkt **nur ohne Kernel-Lockdown** (auch zur Laufzeit geprüft), also normalerweise nicht bei aktivem Secure Boot, braucht `CAP_SYS_RAWIO` und erlaubt nur die Funktionen `0x1000–0x10ff`. |
 
 ### Sicherheit
 
@@ -76,7 +76,7 @@ Hinweise und Messwerte von anderen LIFEBOOK-Modellen (E734, E744, E753 …) sind
 Die 7260 fällt mit aktivem PCIe-ASPM-L1 gelegentlich vom Bus. Im Kernel-Log steht dann `iwlwifi transaction failed`, die Register lesen `ffffffff`, und das WLAN ist bis zum Neustart tot.
 
 - `80-iwlwifi-7260-no-aspm.rules` schaltet ASPM L1 und ClockPM für die Karte ab. Kosten: Die CPU-Package kommt im Leerlauf nur noch bis PC2 (≈ 1–2 W mehr).
-- `iwlwifi-watchdog.service` erkennt den Absturz trotzdem und setzt die Karte per PCI remove/rescan zurück, ohne Neustart. Log: `/var/log/iwlwifi-watchdog.log`.
+- `iwlwifi-watchdog.service` erkennt den Absturz trotzdem und setzt die Karte per PCI remove/rescan zurück, ohne Neustart. Nach 5 erfolglosen Resets gibt er auf, bis die Karte wieder läuft. Log: `journalctl -u iwlwifi-watchdog`.
 
 ## Getestet
 
