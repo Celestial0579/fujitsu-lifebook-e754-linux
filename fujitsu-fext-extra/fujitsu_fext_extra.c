@@ -19,10 +19,12 @@
 #include <linux/acpi.h>
 #include <linux/dmi.h>
 #include <linux/hwmon.h>
+#include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/platform_device.h>
+#include <linux/security.h>
 #include <linux/sysfs.h>
 
 #define FUNC_POWER	0x1005
@@ -38,11 +40,19 @@ static bool force;
 module_param(force, bool, 0444);
 MODULE_PARM_DESC(force, "Auch auf nicht getesteten Modellen laden");
 
+#define EC_CACHE_MS	1000	/* hoechstens eine EC-Abfrage pro Sekunde */
+
 struct fext_extra {
 	acpi_handle func;
-	struct mutex lock;		/* raw_call */
+	struct mutex lock;		/* Sensor-Cache und raw_last */
 	u32 power_caps;
+	bool raw_ok;			/* allow_raw und kein Lockdown */
 	u32 raw_last;
+	unsigned long sens_stamp;
+	bool sens_valid;
+	u32 tacho, temp, tctrl;
+	bool curve_valid;
+	u8 curve[12][2];		/* [i][0] = Grad C, [i][1] = Stellwert */
 };
 
 static struct platform_device *fext_pdev;
@@ -101,6 +111,39 @@ static int fext_ec_read(struct fext_extra *fx, u8 reg, u32 *val)
 	return ret;
 }
 
+/*
+ * Sensoren werden gecacht: Jede EC-Transaktion haelt die serialisierte AML-Methode
+ * FUNC bis zu 100 ms. Ohne Cache koennte jeder unprivilegierte Nutzer per Lese-
+ * Schleife den EC und alle anderen FEXT-Aufrufe (Hotkeys, Akku) ausbremsen.
+ */
+static int fext_sensors_update(struct fext_extra *fx)
+{
+	u32 t, tc, tr;
+	int ret;
+
+	lockdep_assert_held(&fx->lock);
+	if (fx->sens_valid &&
+	    time_before(jiffies, fx->sens_stamp + msecs_to_jiffies(EC_CACHE_MS)))
+		return 0;
+
+	ret = fext_ec_read(fx, EC_TACHO, &t);
+	if (!ret)
+		ret = fext_ec_read(fx, EC_TEMP, &tc);
+	if (!ret)
+		ret = fext_ec_read(fx, EC_TCTRL, &tr);
+	/* Auch Fehler zaehlen als Abfrage, sonst haemmert ein Leser bei Timeouts weiter */
+	fx->sens_stamp = jiffies;
+	if (ret) {
+		fx->sens_valid = false;
+		return ret;
+	}
+	fx->tacho = t;
+	fx->temp = tc;
+	fx->tctrl = tr;
+	fx->sens_valid = true;
+	return 0;
+}
+
 /* ---------------- hwmon ---------------- */
 
 static umode_t fext_hwmon_visible(const void *data, enum hwmon_sensor_types type,
@@ -113,25 +156,23 @@ static int fext_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			   u32 attr, int channel, long *val)
 {
 	struct fext_extra *fx = dev_get_drvdata(dev);
-	u32 v;
 	int ret;
 
-	switch (type) {
-	case hwmon_fan:
-		ret = fext_ec_read(fx, EC_TACHO, &v);
-		if (ret)
-			return ret;
-		*val = (v == 0 || v == 0xffff) ? 0 : TACHO_CLK / v;
-		return 0;
-	case hwmon_temp:
-		ret = fext_ec_read(fx, channel ? EC_TCTRL : EC_TEMP, &v);
-		if (ret)
-			return ret;
-		*val = (channel ? (v >> 8) : (v & 0xff)) * 1000L;
-		return 0;
-	default:
+	if (type != hwmon_fan && type != hwmon_temp)
 		return -EOPNOTSUPP;
+
+	mutex_lock(&fx->lock);
+	ret = fext_sensors_update(fx);
+	if (!ret) {
+		if (type == hwmon_fan)
+			*val = (fx->tacho == 0 || fx->tacho == 0xffff) ? 0 : TACHO_CLK / fx->tacho;
+		else if (channel)
+			*val = (fx->tctrl >> 8) * 1000L;
+		else
+			*val = (fx->temp & 0xff) * 1000L;
 	}
+	mutex_unlock(&fx->lock);
+	return ret;
 }
 
 static int fext_hwmon_read_string(struct device *dev, enum hwmon_sensor_types type,
@@ -166,16 +207,26 @@ static ssize_t fan_curve_show(struct device *dev, struct device_attribute *attr,
 {
 	struct fext_extra *fx = dev_get_drvdata(dev);
 	ssize_t len = 0;
+	int i;
+
+	for (i = 0; i < EC_CURVE_N; i++)
+		len += sysfs_emit_at(buf, len, "%u %u\n", fx->curve[i][0], fx->curve[i][1]);
+	return len;
+}
+
+/* Die Kurve ist in der EC-Firmware fest, daher nur einmal lesen. */
+static void fext_curve_read(struct fext_extra *fx)
+{
 	u32 v;
-	int i, ret;
+	int i;
 
 	for (i = 0; i < EC_CURVE_N; i++) {
-		ret = fext_ec_read(fx, EC_CURVE + i, &v);
-		if (ret)
-			return ret;
-		len += sysfs_emit_at(buf, len, "%u %u\n", v & 0xff, v >> 8);
+		if (fext_ec_read(fx, EC_CURVE + i, &v))
+			return;
+		fx->curve[i][0] = v & 0xff;
+		fx->curve[i][1] = v >> 8;
 	}
-	return len;
+	fx->curve_valid = true;
 }
 static DEVICE_ATTR_RO(fan_curve);
 
@@ -225,8 +276,12 @@ static DEVICE_ATTR_RW(bluetooth_power);
 static ssize_t raw_call_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct fext_extra *fx = dev_get_drvdata(dev);
+	u32 v;
 
-	return sysfs_emit(buf, "%#x\n", fx->raw_last);
+	mutex_lock(&fx->lock);
+	v = fx->raw_last;
+	mutex_unlock(&fx->lock);
+	return sysfs_emit(buf, "%#x\n", v);
 }
 
 static ssize_t raw_call_store(struct device *dev, struct device_attribute *attr,
@@ -236,6 +291,13 @@ static ssize_t raw_call_store(struct device *dev, struct device_attribute *attr,
 	u32 f, a1, a2, a3, v = 0;
 	int ret;
 
+	/*
+	 * Beliebige FUNC-Aufrufe erlauben SMIs, EC- und PMIO-Schreibzugriffe; das ist
+	 * gleichwertig zu /dev/port. Zusaetzlich zur Dateiberechtigung pruefen, damit ein
+	 * weitergereichter Dateideskriptor nicht reicht.
+	 */
+	if (!fx->raw_ok || !capable(CAP_SYS_RAWIO))
+		return -EPERM;
 	if (sscanf(buf, "%x %x %x %x", &f, &a1, &a2, &a3) != 4)
 		return -EINVAL;
 	ret = fext_call(fx, f, a1, a2, a3, &v);
@@ -259,11 +321,13 @@ static umode_t fext_attr_visible(struct kobject *kobj, struct attribute *attr, i
 	struct fext_extra *fx = dev_get_drvdata(kobj_to_dev(kobj));
 
 	if (attr == &dev_attr_raw_call.attr)
-		return allow_raw ? attr->mode : 0;
+		return fx->raw_ok ? attr->mode : 0;
 	if (attr == &dev_attr_bay_power.attr)
 		return (fx->power_caps & PWR_BAY) ? attr->mode : 0;
 	if (attr == &dev_attr_bluetooth_power.attr)
 		return (fx->power_caps & PWR_BT) ? attr->mode : 0;
+	if (attr == &dev_attr_fan_curve.attr)
+		return fx->curve_valid ? attr->mode : 0;
 	return attr->mode;
 }
 
@@ -279,11 +343,14 @@ static int fext_probe(struct platform_device *pdev)
 	struct device *hw;
 	acpi_status st;
 	u32 v;
+	int ret;
 
 	fx = devm_kzalloc(&pdev->dev, sizeof(*fx), GFP_KERNEL);
 	if (!fx)
 		return -ENOMEM;
-	mutex_init(&fx->lock);
+	ret = devm_mutex_init(&pdev->dev, &fx->lock);
+	if (ret)
+		return ret;
 
 	st = acpi_get_handle(NULL, "\\_SB.FEXT.FUNC", &fx->func);
 	if (ACPI_FAILURE(st))
@@ -294,6 +361,15 @@ static int fext_probe(struct platform_device *pdev)
 	if (!fext_call(fx, FUNC_POWER, 0, 0, 0, &v))
 		fx->power_caps = v;
 	dev_info(&pdev->dev, "Geraete-Strom-Caps %#x\n", fx->power_caps);
+	fext_curve_read(fx);
+
+	/* raw_call ist ein Weg an /dev/port vorbei, unter Kernel-Lockdown daher gesperrt. */
+	if (allow_raw) {
+		if (security_locked_down(LOCKDOWN_IOPORT))
+			dev_warn(&pdev->dev, "allow_raw ignoriert: Kernel-Lockdown aktiv\n");
+		else
+			fx->raw_ok = true;
+	}
 
 	hw = devm_hwmon_device_register_with_info(&pdev->dev, "fujitsu_fext", fx,
 						  &fext_hwmon_chip, NULL);

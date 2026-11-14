@@ -48,7 +48,14 @@ echo 0 | sudo tee /sys/devices/platform/fujitsu-fext-extra/bay_power   # DVD aus
 | Parameter | Wirkung |
 |---|---|
 | `force=1` | auch auf anderen Modellen als E754 laden (auf eigene Gefahr, andere LIFEBOOKs mit FUJ02E3 könnten passen) |
-| `allow_raw=1` | Entwickler-Attribut `raw_call`: `echo "<func> <a1> <a2> <a3>" > raw_call; cat raw_call` (Hex) |
+| `allow_raw=1` | Entwickler-Attribut `raw_call`: `echo "<func> <a1> <a2> <a3>" > raw_call; cat raw_call` (Hex). Wirkt **nur ohne Kernel-Lockdown**, also normalerweise nicht bei aktivem Secure Boot, und braucht `CAP_SYS_RAWIO`. |
+
+### Sicherheit
+
+- **Lesen** (Sensoren, `fan_curve`, Schalterzustände) darf jeder Nutzer. Die Sensorwerte werden 1 s gecacht und die Lüfterkurve nur einmal beim Laden gelesen, damit niemand den EC per Leseschleife ausbremsen kann.
+- **Schalten** (`bay_power`, `bluetooth_power`) nur root.
+- **`raw_call`** erlaubt beliebige Firmware-Aufrufe (SMIs, EC- und Port-Zugriffe) und ist damit so mächtig wie `/dev/port`. Er ist standardmäßig aus und unter Lockdown gesperrt, damit das signierte Modul den Secure-Boot-Schutz nicht aushebelt.
+- ⚠️ `bay_power=0` trennt das Laufwerk im Modulschacht hart vom Strom. Ein eingebundenes Laufwerk vorher aushängen.
 
 ### Technische Details (aus der DSDT, BIOS 1.32)
 
