@@ -81,6 +81,7 @@ Die 7260 fällt mit aktivem PCIe-ASPM-L1 gelegentlich vom Bus. Im Kernel-Log ste
 ## Getestet
 
 LIFEBOOK E754, BIOS 1.32, i5-4210M, Ubuntu 26.04, Kernel 7.0, Secure Boot an.
+Treiber-Stresstest (0.4): 8 parallele Leser + Bluetooth-Schalten + 100× Entladen/Laden unter Last ohne Oops/WARN; 600 Lade-Zyklen ohne Anstieg in den kmalloc-Caches.
 S3 ✅ · s2idle ✅ · Ladegrenze (`charge_control_end_threshold`, mainline) ✅ · Fingerabdruck (fprintd) ✅ · Hotkeys ✅ (die ECO-Taste meldet `KEY_PROG4` und ist frei belegbar)
 
 ## Lizenz

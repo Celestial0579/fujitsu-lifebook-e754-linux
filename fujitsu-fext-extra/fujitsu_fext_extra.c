@@ -41,6 +41,7 @@ module_param(force, bool, 0444);
 MODULE_PARM_DESC(force, "Auch auf nicht getesteten Modellen laden");
 
 #define EC_CACHE_MS	1000	/* hoechstens eine EC-Abfrage pro Sekunde */
+#define EC_CURVE_N	12	/* Stufen der Luefterkurve, EC-Register 0x10..0x1b */
 
 struct fext_extra {
 	acpi_handle func;
@@ -49,10 +50,11 @@ struct fext_extra {
 	bool raw_ok;			/* allow_raw und kein Lockdown */
 	u32 raw_last;
 	unsigned long sens_stamp;
-	bool sens_valid;
+	bool sens_queried;		/* sens_stamp/sens_err gueltig */
+	int sens_err;			/* Ergebnis der letzten Abfrage, auch gecacht */
 	u32 tacho, temp, tctrl;
 	bool curve_valid;
-	u8 curve[12][2];		/* [i][0] = Grad C, [i][1] = Stellwert */
+	u8 curve[EC_CURVE_N][2];	/* [i][0] = Grad C, [i][1] = Stellwert */
 };
 
 static struct platform_device *fext_pdev;
@@ -97,7 +99,6 @@ static int fext_call(struct fext_extra *fx, u32 fn, u32 a1, u32 a2, u32 a3, u32 
  */
 #define EC_TEMP		0x00
 #define EC_CURVE	0x10
-#define EC_CURVE_N	12
 #define EC_TACHO	0x50
 #define EC_TCTRL	0x52
 #define TACHO_CLK	30000000
@@ -122,26 +123,29 @@ static int fext_sensors_update(struct fext_extra *fx)
 	int ret;
 
 	lockdep_assert_held(&fx->lock);
-	if (fx->sens_valid &&
+	/*
+	 * Auch ein Fehler wird EC_CACHE_MS lang zurueckgegeben, sonst wuerde ein Leser
+	 * den EC gerade dann im Takt abfragen, wenn er ohnehin mit Timeouts antwortet.
+	 */
+	if (fx->sens_queried &&
 	    time_before(jiffies, fx->sens_stamp + msecs_to_jiffies(EC_CACHE_MS)))
-		return 0;
+		return fx->sens_err;
 
 	ret = fext_ec_read(fx, EC_TACHO, &t);
 	if (!ret)
 		ret = fext_ec_read(fx, EC_TEMP, &tc);
 	if (!ret)
 		ret = fext_ec_read(fx, EC_TCTRL, &tr);
-	/* Auch Fehler zaehlen als Abfrage, sonst haemmert ein Leser bei Timeouts weiter */
 	fx->sens_stamp = jiffies;
-	if (ret) {
-		fx->sens_valid = false;
-		return ret;
+	fx->sens_queried = true;
+	fx->sens_err = ret;
+	if (!ret) {
+		/* Nur vollstaendige Saetze uebernehmen, nie gemischt alt/neu */
+		fx->tacho = t;
+		fx->temp = tc;
+		fx->tctrl = tr;
 	}
-	fx->tacho = t;
-	fx->temp = tc;
-	fx->tctrl = tr;
-	fx->sens_valid = true;
-	return 0;
+	return ret;
 }
 
 /* ---------------- hwmon ---------------- */
@@ -300,8 +304,9 @@ static ssize_t raw_call_store(struct device *dev, struct device_attribute *attr,
 		return -EPERM;
 	if (sscanf(buf, "%x %x %x %x", &f, &a1, &a2, &a3) != 4)
 		return -EINVAL;
-	ret = fext_call(fx, f, a1, a2, a3, &v);
+	/* Lock ueber den Aufruf, damit parallele Schreiber ihr raw_last nicht vertauschen */
 	mutex_lock(&fx->lock);
+	ret = fext_call(fx, f, a1, a2, a3, &v);
 	fx->raw_last = v;
 	mutex_unlock(&fx->lock);
 	return (ret && ret != -EOPNOTSUPP && ret != -ETIMEDOUT) ? ret : count;
@@ -426,4 +431,3 @@ module_exit(fext_exit);
 
 MODULE_DESCRIPTION("Fujitsu FEXT Zusatzfunktionen (Luefter, EC-Temperaturen, Geraete-Strom)");
 MODULE_LICENSE("GPL");
-MODULE_SOFTDEP("pre: fujitsu_laptop");
