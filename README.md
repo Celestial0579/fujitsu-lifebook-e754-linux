@@ -1,5 +1,7 @@
 # Fujitsu LIFEBOOK E754 unter Linux
 
+[![CI](https://github.com/Celestial0579/fujitsu-lifebook-e754-linux/actions/workflows/ci.yml/badge.svg)](https://github.com/Celestial0579/fujitsu-lifebook-e754-linux/actions/workflows/ci.yml)
+
 Zusatztreiber und Fixes für das **Fujitsu LIFEBOOK E754**, die Funktionen nachrüsten, die sonst nur Fujitsus Windows-Tools ansprechen.
 
 > **English summary:** `fujitsu-fext-extra` is an out-of-tree kernel module for the Fujitsu LIFEBOOK E754 that complements the mainline `fujitsu_laptop` driver. It exposes the fan speed, EC temperatures and the firmware fan curve via hwmon/sysfs, and lets you power the modular bay and the Bluetooth controller on and off. Also included: a udev rule and a watchdog for the Intel Wireless 7260 "falling off the PCIe bus". Install with `sudo ./install.sh`. Tested on BIOS 1.32, kernel 7.0, Ubuntu 26.04, Secure Boot enabled.

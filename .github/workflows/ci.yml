@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kernel-module:
+    name: Treiber bauen und statisch prüfen
+    runs-on: ubuntu-latest
+    # Gleiche Distribution wie das Zielsystem (Kernel 7.x); die Header der
+    # GitHub-Runner sind zu alt (devm_mutex_init braucht >= 6.10).
+    container: ubuntu:26.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      SPARSE_TAG: v0.6.4
+    steps:
+      - name: Pakete installieren
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends \
+            build-essential linux-headers-generic git ca-certificates perl \
+            libelf-dev kmod
+      - uses: actions/checkout@v4.2.2
+
+      - name: Kernel-Header ermitteln
+        run: |
+          KVER=$(ls /lib/modules | sort -V | tail -1)
+          echo "KDIR=/lib/modules/$KVER/build" >> "$GITHUB_ENV"
+          echo "Baue gegen Kernel-Header $KVER"
+
+      - name: Build mit W=1, Warnungen sind Fehler
+        run: make -C "$KDIR" M="$PWD/fujitsu-fext-extra" W=1 KCFLAGS=-Werror modules
+
+      - name: sparse bauen (${{ env.SPARSE_TAG }})
+        run: |
+          git clone -q --depth 1 --branch "$SPARSE_TAG" \
+            https://git.kernel.org/pub/scm/devel/sparse/sparse.git /tmp/sparse
+          make -C /tmp/sparse -j"$(nproc)" -s sparse
+
+      - name: sparse-Prüfung
+        run: |
+          make -C "$KDIR" M="$PWD/fujitsu-fext-extra" clean
+          make -C "$KDIR" M="$PWD/fujitsu-fext-extra" C=2 CHECK=/tmp/sparse/sparse modules 2>&1 \
+            | tee sparse.log
+          if grep -E 'fujitsu_fext_extra\.c:[0-9]+:[0-9]+: (warning|error)' sparse.log; then
+            echo "::error::sparse hat Befunde"; exit 1
+          fi
+
+      - name: checkpatch (strict)
+        run: |
+          perl "$KDIR/scripts/checkpatch.pl" --no-tree --strict --show-types \
+            -f fujitsu-fext-extra/fujitsu_fext_extra.c
+
+  scripts:
+    name: Shell-Skripte prüfen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: Syntax
+        run: |
+          bash -n install.sh
+          bash -n iwlwifi-watchdog.sh
+      - name: shellcheck
+        run: shellcheck install.sh iwlwifi-watchdog.sh
+      - name: udev-Regel und Unit-Datei
+        run: |
+          grep -q 'ACTION=="add|bind"' 80-iwlwifi-7260-no-aspm.rules
+          systemd-analyze verify --man=no iwlwifi-watchdog.service 2>&1 \
+            | grep -v 'is not executable\|No such file' || true

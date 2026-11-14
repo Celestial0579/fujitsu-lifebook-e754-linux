@@ -16,8 +16,17 @@ find_dev() {
   return 1
 }
 
+# Netzwerk-Interface der Karte (leer, wenn keines existiert)
+iface_of() {
+  local n
+  for n in "/sys/bus/pci/devices/$1/net/"*; do
+    [ -e "$n" ] && { basename "$n"; return 0; }
+  done
+  return 1
+}
+
 DEV=$(find_dev) || { echo "Keine Intel Wireless 7260 gefunden, Waechter beendet."; exit 0; }
-IFACE=$(ls "/sys/bus/pci/devices/$DEV/net" 2>/dev/null | head -1)
+IFACE=$(iface_of "$DEV")
 echo "Ueberwache $DEV (${IFACE:-ohne Interface})"
 
 # Nur echte iwlwifi-Kernelmeldungen dieser Karte, am Zeilenanfang verankert
@@ -40,14 +49,14 @@ journalctl -k -f -n0 -o cat | grep --line-buffered -E "$PAT" | while read -r lin
   sleep 2
   echo 1 > /sys/bus/pci/rescan
   sleep 10
-  IFACE=$(ls "/sys/bus/pci/devices/$DEV/net" 2>/dev/null | head -1)
+  IFACE=$(iface_of "$DEV")
   if [ -n "$IFACE" ]; then
     echo "$IFACE wieder da"
     tries=0
   else
     echo "Rescan erfolglos, lade iwlwifi neu"
     modprobe -r iwlmvm iwlwifi; sleep 2; modprobe iwlwifi; sleep 5
-    IFACE=$(ls "/sys/bus/pci/devices/$DEV/net" 2>/dev/null | head -1)
+    IFACE=$(iface_of "$DEV")
     [ -n "$IFACE" ] && { echo "$IFACE nach Modul-Reload wieder da"; tries=0; }
   fi
 done

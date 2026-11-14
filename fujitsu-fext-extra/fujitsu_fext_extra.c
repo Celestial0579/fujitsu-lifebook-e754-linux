@@ -275,15 +275,27 @@ static ssize_t power_store(struct device *dev, const char *buf, size_t count, u3
 }
 
 static ssize_t bay_power_show(struct device *d, struct device_attribute *a, char *b)
-{ return power_show(d, b, PWR_BAY); }
-static ssize_t bay_power_store(struct device *d, struct device_attribute *a, const char *b, size_t c)
-{ return power_store(d, b, c, PWR_BAY); }
+{
+	return power_show(d, b, PWR_BAY);
+}
+
+static ssize_t bay_power_store(struct device *d, struct device_attribute *a,
+			       const char *b, size_t c)
+{
+	return power_store(d, b, c, PWR_BAY);
+}
 static DEVICE_ATTR_RW(bay_power);
 
 static ssize_t bluetooth_power_show(struct device *d, struct device_attribute *a, char *b)
-{ return power_show(d, b, PWR_BT); }
-static ssize_t bluetooth_power_store(struct device *d, struct device_attribute *a, const char *b, size_t c)
-{ return power_store(d, b, c, PWR_BT); }
+{
+	return power_show(d, b, PWR_BT);
+}
+
+static ssize_t bluetooth_power_store(struct device *d, struct device_attribute *a,
+				     const char *b, size_t c)
+{
+	return power_store(d, b, c, PWR_BT);
+}
 static DEVICE_ATTR_RW(bluetooth_power);
 
 /* ---------------- Entwicklung: raw_call ---------------- */
@@ -331,7 +343,7 @@ static ssize_t raw_call_store(struct device *dev, struct device_attribute *attr,
 	mutex_unlock(&fx->lock);
 	return (ret && ret != -EOPNOTSUPP && ret != -ETIMEDOUT) ? ret : count;
 }
-static DEVICE_ATTR(raw_call, 0600, raw_call_show, raw_call_store);
+static DEVICE_ATTR_ADMIN_RW(raw_call);
 
 static struct attribute *fext_attrs[] = {
 	&dev_attr_bay_power.attr,
