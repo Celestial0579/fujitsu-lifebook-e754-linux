@@ -80,6 +80,27 @@ Die 7260 fällt mit aktivem PCIe-ASPM-L1 gelegentlich vom Bus. Im Kernel-Log ste
 - `80-iwlwifi-7260-no-aspm.rules` schaltet ASPM L1 und ClockPM für die Karte ab. Kosten: Die CPU-Package kommt im Leerlauf nur noch bis PC2 (≈ 1–2 W mehr).
 - `iwlwifi-watchdog.service` erkennt den Absturz trotzdem und setzt die Karte per PCI remove/rescan zurück, ohne Neustart. Nach 5 erfolglosen Resets gibt er auf, bis die Karte wieder läuft. Log: `journalctl -u iwlwifi-watchdog`.
 
+## Optional: BIOS-Flash vor Schreibzugriffen schützen
+
+Auf dem getesteten E754 (BIOS 1.32) ist der BIOS-Schreibschutz des Chipsatzes nicht gesetzt (`BIOS_CNTL`: BLE=0, SMM_BWP=0). Der Kernel-Treiber `spi_intel` stellt dann den Bereich „BIOS1“ als **beschreibbares** `/dev/mtd1` bereit. Darin liegen BIOS-Daten einschließlich Secure-Boot-Variablen. Root könnte sie am Kernel-Lockdown vorbei roh überschreiben.
+
+Prüfen:
+
+```bash
+sudo setpci -s 00:1f.0 0xdc.b       # 08 = ungesperrt (Bits 1 und 5 nicht gesetzt)
+cat /sys/class/mtd/mtd*/flags 2>/dev/null   # 0xc00 = beschreibbar
+```
+
+Abhilfe: Den Treiber sperren. Im Alltag braucht ihn nichts, fwupd liest darüber nur die BIOS-Version.
+
+```bash
+sudo install -m644 blacklist-spi-intel.conf /etc/modprobe.d/
+sudo modprobe -r spi_intel_platform spi_intel
+sudo update-initramfs -u
+```
+
+Rückgängig: die Datei löschen, `sudo update-initramfs -u`, neu starten.
+
 ## Getestet
 
 LIFEBOOK E754, BIOS 1.32, i5-4210M, Ubuntu 26.04, Kernel 7.0, Secure Boot an.
