@@ -1,0 +1,2 @@
+# Intel Wireless 7260 faellt mit ASPM L1 vom PCIe-Bus (MMIO liest ffffffff) -> L1 + ClockPM fuer diesen Link aus
+ACTION=="add|bind", SUBSYSTEM=="pci", ATTR{vendor}=="0x8086", ATTR{device}=="0x08b1", ATTR{link/l1_aspm}="0", ATTR{link/clkpm}="0"
