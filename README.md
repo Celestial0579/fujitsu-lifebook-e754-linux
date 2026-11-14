@@ -101,6 +101,21 @@ sudo update-initramfs -u
 
 Rückgängig: die Datei löschen, `sudo update-initramfs -u`, neu starten.
 
+## Optional: Intel ME / AMT abschotten
+
+Die ME-Firmware 9.0.x des E754 vPro ist von INTEL-SA-00075 (AMT) betroffen. Fujitsu bietet ME 9.1.45.3000 an, das Update geht aber nur von DOS oder Windows aus. Ohne Flash lässt sich die Lücke so abschwächen:
+
+1. **AMT abschalten:** Strg+P beim Start (MEBx) bzw. F2 → „Intel AMT“ → **Disabled**. Das ist Intels offizielle Abhilfe.
+2. **ME-Schnittstelle unter Linux sperren:** Dann kann kein Programm mehr mit der ME sprechen.
+
+```bash
+sudo install -m644 blacklist-intel-mei.conf /etc/modprobe.d/
+sudo modprobe -r mei_hdcp mei_pxp mei_me mei
+sudo update-initramfs -u
+```
+
+Nebenwirkung: HDCP/PXP-Kopierschutz der Grafik ist nicht verfügbar. Rückgängig: die Datei löschen, `sudo update-initramfs -u`, neu starten.
+
 ## Getestet
 
 LIFEBOOK E754, BIOS 1.32, i5-4210M, Ubuntu 26.04, Kernel 7.0, Secure Boot an.
