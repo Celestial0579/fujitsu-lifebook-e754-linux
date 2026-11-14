@@ -39,8 +39,16 @@ jobs:
 
       - name: sparse bauen (${{ env.SPARSE_TAG }})
         run: |
-          git clone -q --depth 1 --branch "$SPARSE_TAG" \
-            https://git.kernel.org/pub/scm/devel/sparse/sparse.git /tmp/sparse
+          # git.kernel.org ist von GitHub-Runnern gelegentlich nicht erreichbar:
+          # mehrere Versuche, danach Googles offizieller Spiegel von kernel.org
+          for url in https://git.kernel.org/pub/scm/devel/sparse/sparse.git \
+                     https://git.kernel.org/pub/scm/devel/sparse/sparse.git \
+                     https://kernel.googlesource.com/pub/scm/devel/sparse/sparse.git; do
+            rm -rf /tmp/sparse
+            timeout 120 git clone -q --depth 1 --branch "$SPARSE_TAG" "$url" /tmp/sparse && break
+            echo "::warning::Klonen von $url fehlgeschlagen"; sleep 10
+          done
+          test -f /tmp/sparse/Makefile
           make -C /tmp/sparse -j"$(nproc)" -s sparse
 
       - name: sparse-Prüfung

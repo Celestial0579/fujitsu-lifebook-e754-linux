@@ -30,7 +30,9 @@ unzip -q "$ME_ZIP" -d "$W/me"
 unzip -q "$FD_ZIP" FD14LITE.img -d "$W"
 TOOL=$(find "$W/me" -path '*DOS update tool*' -iname 'FWUpdLcl.exe' | head -1)
 BIN=$(find "$W/me" -path '*64-bit*' -iname 'ME9.1_5M_Production.bin' | head -1)
-[ -n "$TOOL" ] && [ -n "$BIN" ] || { echo "ME-Paket hat unerwarteten Inhalt"; exit 1; }
+if [ -z "$TOOL" ] || [ -z "$BIN" ]; then
+  echo "ME-Paket hat unerwarteten Inhalt"; exit 1
+fi
 
 cp "$W/FD14LITE.img" "$OUT"
 export MTOOLS_SKIP_CHECK=1

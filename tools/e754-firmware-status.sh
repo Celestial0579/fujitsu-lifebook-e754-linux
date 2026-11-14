@@ -31,7 +31,7 @@ if [ -n "$(lspci -s 00:16.3 2>/dev/null)" ]; then
 else
   ok "AMT aus (KT/SOL-Controller 00:16.3 nicht vorhanden)"
 fi
-ver=$(cat /sys/class/mei/mei0/fw_ver 2>/dev/null | head -1)
+ver=$(head -1 /sys/class/mei/mei0/fw_ver 2>/dev/null)
 if [ -n "$ver" ]; then
   case "$ver" in
     *:9.1.4[5-9].3*|*:9.1.[5-9]*) ok "ME-Firmware $ver (INTEL-SA-00075 behoben)";;
