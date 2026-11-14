@@ -6,6 +6,14 @@ Zusatztreiber und Fixes für das **Fujitsu LIFEBOOK E754**, die Funktionen nachr
 
 > **English summary:** `fujitsu-fext-extra` is an out-of-tree kernel module for the Fujitsu LIFEBOOK E754 that complements the mainline `fujitsu_laptop` driver. It exposes the fan speed, EC temperatures and the firmware fan curve via hwmon/sysfs, and lets you power the modular bay and the Bluetooth controller on and off. Also included: a udev rule and a watchdog for the Intel Wireless 7260 "falling off the PCIe bus". Install with `sudo ./install.sh`. Tested on BIOS 1.32, kernel 7.0, Ubuntu 26.04, Secure Boot enabled.
 
+## Firmware-Stand prüfen und warten
+
+```bash
+sudo ./tools/e754-firmware-status.sh
+```
+
+Zeigt ME/AMT, BIOS-Schreibschutz, TPM (ROCA), Microcode und Modem. Was sich aktualisieren lässt, wo es die offiziellen Pakete gibt und was man besser lässt, steht in **[FIRMWARE.md](FIRMWARE.md)**. Dazu gehört ein Skript, das einen FreeDOS-Stick für das ME-Update auf 9.1.45.3000 baut.
+
 ## Installation
 
 ```bash
