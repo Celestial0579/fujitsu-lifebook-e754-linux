@@ -1,29 +1,81 @@
-# LIFEBOOK E754 – Hardware unter Linux
+# Fujitsu LIFEBOOK E754 unter Linux
 
-## Treiber `fujitsu-fext-extra` (DKMS 0.2, signiert mit MOK)
+Zusatztreiber und Fixes für das **Fujitsu LIFEBOOK E754**, die Funktionen nachrüsten, die sonst nur Fujitsus Windows-Tools ansprechen.
 
-Ruft `\_SB.FEXT.FUNC` direkt auf; ergänzt den Mainline-Treiber `fujitsu_laptop`.
+> **English summary:** `fujitsu-fext-extra` is an out-of-tree kernel module for the Fujitsu LIFEBOOK E754 that complements the mainline `fujitsu_laptop` driver. It exposes the fan speed, EC temperatures and the firmware fan curve via hwmon/sysfs, and lets you power the modular bay and the Bluetooth controller on and off. Also included: a udev rule and a watchdog for the Intel Wireless 7260 "falling off the PCIe bus". Install with `sudo ./install.sh`. Tested on BIOS 1.32, kernel 7.0, Ubuntu 26.04, Secure Boot enabled.
+
+## Installation
+
+```bash
+git clone https://github.com/Celestial0579/fujitsu-lifebook-e754-linux.git
+cd fujitsu-lifebook-e754-linux
+sudo ./install.sh            # Treiber + WLAN-Fixes (falls Intel 7260 verbaut)
+sudo ./install.sh --no-wifi  # nur der Treiber
+```
+
+Das Skript installiert das Modul per DKMS, sodass es nach jedem Kernel-Update automatisch neu gebaut wird, und lädt es beim Booten.
+
+**Secure Boot:** DKMS signiert das Modul mit einem eigenen Schlüssel. Diesen musst du einmal eintragen:
+
+```bash
+sudo mokutil --import /var/lib/shim-signed/mok/MOK.der
+```
+
+Einmal-Passwort festlegen, neu starten. Im blauen MOK-Manager schnell eine Taste drücken (er wartet nur ~10 s), dann **Enroll MOK → Continue → Yes**, Passwort eingeben, **Reboot**.
+
+## Treiber `fujitsu-fext-extra`
+
+Ruft die Firmware-Schnittstelle `\_SB.FEXT.FUNC` (ACPI FUJ02E3) direkt auf und ergänzt so `fujitsu_laptop` (Hotkeys, LEDs, Ladegrenze), ohne dessen ACPI-Gerät zu übernehmen.
 
 | Pfad | Funktion |
 |---|---|
-| `hwmon/…/fan1_input` | Lüfterdrehzahl (EC-Reg. 0x50, 30 000 000 / Periode) |
-| `hwmon/…/temp1_input` | CPU-Temperatur laut EC |
-| `hwmon/…/temp2_input` | geglättete Regeltemperatur des EC |
-| `/sys/devices/platform/fujitsu-fext-extra/fan_curve` | Lüfterkurve der Firmware (°C, Stellwert) |
-| `…/bay_power` | Strom Modulschacht (DVD) 0/1 |
-| `…/bluetooth_power` | Strom Bluetooth-Controller 0/1 |
+| `…/hwmon/hwmonN/fan1_input` | Lüfterdrehzahl in U/min |
+| `…/hwmon/hwmonN/temp1_input` | CPU-Temperatur laut EC |
+| `…/hwmon/hwmonN/temp2_input` | geglättete Regeltemperatur des EC |
+| `/sys/devices/platform/fujitsu-fext-extra/fan_curve` | Lüfterkurve der Firmware (°C, Stellwert 0–255) |
+| `…/bay_power` | Strom Modulschacht (z. B. DVD-Laufwerk) `0`/`1` |
+| `…/bluetooth_power` | Strom Bluetooth-Controller `0`/`1` |
 
-Entwicklung: `modprobe fujitsu_fext_extra allow_raw=1` → `raw_call` (`echo "1006 10 150 0" > raw_call; cat raw_call`).
+Beispiel:
 
-Neu bauen nach Codeänderung: Version in `dkms.conf` erhöhen, nach `/usr/src/fujitsu-fext-extra-<ver>` kopieren, `dkms install`.
+```bash
+cat /sys/devices/platform/fujitsu-fext-extra/hwmon/hwmon*/fan1_input
+echo 0 | sudo tee /sys/devices/platform/fujitsu-fext-extra/bay_power   # DVD aus (spart Strom)
+```
 
-Nicht genutzt: S009 HWMR (zwingt den Lüfter auf Vollgas), S007 _PPC (unter intel_pstate wirkungslos), S00A Anytime-USB-Charge (Bitbelegung unbekannt).
+### Modul-Parameter
 
-## Weitere Fixes
-- `/etc/udev/rules.d/80-iwlwifi-7260-no-aspm.rules` – ASPM L1 aus für Intel 7260 (fiel sonst vom PCIe-Bus)
-- `iwlwifi-watchdog.service` – PCI-Reset der WLAN-Karte bei Firmware-Absturz, Log `/var/log/wifi-monitor/events.log`
+| Parameter | Wirkung |
+|---|---|
+| `force=1` | auch auf anderen Modellen als E754 laden (auf eigene Gefahr, andere LIFEBOOKs mit FUJ02E3 könnten passen) |
+| `allow_raw=1` | Entwickler-Attribut `raw_call`: `echo "<func> <a1> <a2> <a3>" > raw_call; cat raw_call` (Hex) |
 
-## Testergebnisse 2026-11-14
-S3 ✅ · s2idle ✅ · Hibernate ❌ (Secure-Boot-Lockdown) · Ladegrenze 50–100 % ✅ · Fingerprint ✅ · BT/Bay-Strom ✅ · Hotkeys ✅
-(Helligkeit, Lautstärke, Stumm, Win+P, Funk = KEY_RFKILL, Taste mit Scan 0x413 = KEY_PROG4, frei belegbar)
-Package-C-State nur PC2 (~6,5 W idle), Folge von ASPM-aus am WLAN. Akku 69 % Restkapazität.
+### Technische Details (aus der DSDT, BIOS 1.32)
+
+| FUNC | Bedeutung | Nutzung |
+|---|---|---|
+| `0x1005` S005 | Gerätestrom: Bit 0 = Modulschacht (SATA-Port 2), Bit 10 = Bluetooth; `S005(1, mask, value)`, gesetztes Bit = aus | `bay_power`, `bluetooth_power` |
+| `0x1006` S006 | EC-Mailbox, `S006(0x10, 0x01rr)` liest EC-Bank 1 Register `rr` | Sensoren, Lüfterkurve |
+| `0x1007` S007 | CPU-Grenze über `_PPC` | nicht genutzt, wirkungslos unter `intel_pstate` |
+| `0x1009` S009 | Fujitsu-Hardwaremonitor | nicht genutzt, zwingt den Lüfter für die Messung auf Vollgas |
+| `0x100A` S00A | Anytime-USB-Charge (SMI 0x88) | nicht umgesetzt, Bitbelegung unbekannt |
+
+EC-Bank 1: `0x00` lo = CPU-°C · `0x10–0x1b` Lüfterkurve (hi = Stellwert, lo = °C) · `0x50` Tacho-Periode (U/min = 30 000 000 / Wert) · `0x52` hi = Regeltemperatur.
+
+Hinweise und Messwerte von anderen LIFEBOOK-Modellen (E734, E744, E753 …) sind als Issue oder PR willkommen.
+
+## WLAN-Fixes für Intel Wireless 7260
+
+Die 7260 fällt mit aktivem PCIe-ASPM-L1 gelegentlich vom Bus. Im Kernel-Log steht dann `iwlwifi transaction failed`, die Register lesen `ffffffff`, und das WLAN ist bis zum Neustart tot.
+
+- `80-iwlwifi-7260-no-aspm.rules` schaltet ASPM L1 und ClockPM für die Karte ab. Kosten: Die CPU-Package kommt im Leerlauf nur noch bis PC2 (≈ 1–2 W mehr).
+- `iwlwifi-watchdog.service` erkennt den Absturz trotzdem und setzt die Karte per PCI remove/rescan zurück, ohne Neustart. Log: `/var/log/iwlwifi-watchdog.log`.
+
+## Getestet
+
+LIFEBOOK E754, BIOS 1.32, i5-4210M, Ubuntu 26.04, Kernel 7.0, Secure Boot an.
+S3 ✅ · s2idle ✅ · Ladegrenze (`charge_control_end_threshold`, mainline) ✅ · Fingerabdruck (fprintd) ✅ · Hotkeys ✅ (die ECO-Taste meldet `KEY_PROG4` und ist frei belegbar)
+
+## Lizenz
+
+GPL-2.0-or-later, siehe [LICENSE](LICENSE).
