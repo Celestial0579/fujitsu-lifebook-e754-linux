@@ -83,10 +83,17 @@ jobs:
       - name: Syntax
         run: |
           bash -n install.sh
+          bash -n modul-laden.sh
           bash -n iwlwifi-watchdog.sh
           for f in tools/*.sh tests/*.sh; do bash -n "$f"; done
       - name: shellcheck
-        run: shellcheck install.sh iwlwifi-watchdog.sh tools/*.sh tests/*.sh
+        run: shellcheck install.sh modul-laden.sh iwlwifi-watchdog.sh tools/*.sh tests/*.sh
+      - name: Modulversion (dkms.conf, MODULE_VERSION)
+        run: |
+          dkms=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' fujitsu-fext-extra/dkms.conf)
+          modul=$(sed -n 's/^MODULE_VERSION("\(.*\)");/\1/p' fujitsu-fext-extra/fujitsu_fext_extra.c)
+          echo "dkms.conf: $dkms, MODULE_VERSION: $modul"
+          [ -n "$dkms" ] && [ "$dkms" = "$modul" ]
       - name: Tests (Attrappen, keine Hardware)
         run: |
           for t in tests/*.sh; do echo "== $t"; "$t"; done
