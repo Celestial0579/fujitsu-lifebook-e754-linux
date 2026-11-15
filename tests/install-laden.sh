@@ -4,7 +4,7 @@
 # Moduls (Regressionspruefung zu #12) sowie Ladefehler mit und ohne
 # Secure Boot.
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || exit 1
 
 arbeit=$(mktemp -d)
 trap 'rm -rf "$arbeit"' EXIT
@@ -37,7 +37,7 @@ fehler=0
 # Jedes Muster muss in Ausgabe plus Aufrufprotokoll vorkommen; "!Muster"
 # darf nicht vorkommen.
 fall() {
-    local beschreibung="$1" erwartet="$2" ausgabe rc muster ok=1
+    local beschreibung="$1" erwartet="$2" ausgabe rc muster zeile ok=1
     shift 2
     : > "$arbeit/aufrufe"
     ausgabe=$(modul_laden 0.5.3 2>&1); rc=$?
@@ -55,7 +55,7 @@ $(cat "$arbeit/aufrufe")"
         echo "  OK    $beschreibung"
     else
         echo "  FEHL  $beschreibung (rc=$rc, erwartet $erwartet)"
-        echo "$ausgabe" | sed 's/^/          /'
+        while IFS= read -r zeile; do echo "          $zeile"; done <<< "$ausgabe"
         fehler=$((fehler + 1))
     fi
 }
