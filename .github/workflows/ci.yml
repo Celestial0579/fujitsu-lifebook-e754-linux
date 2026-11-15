@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     # Gleiche Distribution wie das Zielsystem (Kernel 7.x); die Header der
     # GitHub-Runner sind zu alt (devm_mutex_init braucht >= 6.10).
-    container: ubuntu:26.04
+    container: ubuntu:26.04@sha256:065aa8626841f16057b78b027b464cd59c4fac36c204c72dcbf48d66f5fa8a96
     env:
       DEBIAN_FRONTEND: noninteractive
       SPARSE_TAG: v0.6.4
@@ -26,7 +26,7 @@ jobs:
           apt-get install -y -qq --no-install-recommends \
             build-essential linux-headers-generic git ca-certificates perl \
             libelf-dev kmod
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Kernel-Header ermitteln
         run: |
@@ -69,7 +69,7 @@ jobs:
     name: Shell-Skripte prüfen
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Syntax
         run: |
           bash -n install.sh
