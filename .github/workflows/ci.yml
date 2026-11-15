@@ -9,6 +9,13 @@ on:
 permissions:
   contents: read
 
+# `shell: bash` heisst bash -eo pipefail. Ohne das haette jede Pipe den Status
+# ihres letzten Gliedes (z. B. `make ... | tee` den von tee) und ein
+# gescheiterter Build bliebe gruen.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   kernel-module:
     name: Treiber bauen und statisch prüfen
@@ -27,6 +34,9 @@ jobs:
             build-essential linux-headers-generic git ca-certificates perl \
             libelf-dev kmod
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: pipefail ist aktiv (Regressionsprüfung zu #10)
+        run: |
+          if (false | cat); then echo "::error::Pipes ohne pipefail: ein scheiternder Build bliebe gruen"; exit 1; fi
 
       - name: Kernel-Header ermitteln
         run: |
