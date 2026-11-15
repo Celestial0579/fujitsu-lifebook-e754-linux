@@ -495,3 +495,4 @@ module_exit(fext_exit);
 
 MODULE_DESCRIPTION("Fujitsu FEXT Zusatzfunktionen (Luefter, EC-Temperaturen, Geraete-Strom)");
 MODULE_LICENSE("GPL");
+MODULE_VERSION("0.5.3");
