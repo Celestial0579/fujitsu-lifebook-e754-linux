@@ -74,9 +74,12 @@ jobs:
         run: |
           bash -n install.sh
           bash -n iwlwifi-watchdog.sh
-          for f in tools/*.sh; do bash -n "$f"; done
+          for f in tools/*.sh tests/*.sh; do bash -n "$f"; done
       - name: shellcheck
-        run: shellcheck install.sh iwlwifi-watchdog.sh tools/*.sh
+        run: shellcheck install.sh iwlwifi-watchdog.sh tools/*.sh tests/*.sh
+      - name: Tests (Attrappen, keine Hardware)
+        run: |
+          for t in tests/*.sh; do echo "== $t"; "$t"; done
       - name: udev-Regel und Unit-Datei
         run: |
           grep -q 'ACTION=="add|bind"' 80-iwlwifi-7260-no-aspm.rules

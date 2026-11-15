@@ -50,8 +50,15 @@ echo "== BIOS-Flash"
 bc=$(setpci -s 00:1f.0 0xdc.b 2>/dev/null || echo "")
 if [ -n "$bc" ]; then
   b=$((16#$bc))
-  if (( (b >> 1) & 1 )) || (( (b >> 5) & 1 )); then ok "BIOS_CNTL=0x$bc: Schreibschutz-Lock gesetzt"
-  else warn "BIOS_CNTL=0x$bc: BLE=0 und SMM_BWP=0, BIOS-Region nicht gegen Schreiben gesperrt"; fi
+  # Geschuetzt nur mit BLE=1 (Bit 1), SMM_BWP=1 (Bit 5) und BIOSWE=0 (Bit 0),
+  # wie bei chipsec (bios_wp). BLE allein laesst die BIOS-Region ueber das
+  # bekannte Race beim Setzen von BIOSWE beschreibbar (CERT VU#766164).
+  fehlt=""
+  (( (b >> 1) & 1 )) || fehlt="$fehlt BLE=0"
+  (( (b >> 5) & 1 )) || fehlt="$fehlt SMM_BWP=0"
+  (( b & 1 )) && fehlt="$fehlt BIOSWE=1"
+  if [ -z "$fehlt" ]; then ok "BIOS_CNTL=0x$bc: BLE=1, SMM_BWP=1, BIOSWE=0, Schreibschutz-Lock vollstaendig"
+  else warn "BIOS_CNTL=0x$bc:${fehlt}, BIOS-Region nicht vollstaendig gegen Schreiben gesperrt"; fi
 fi
 w=0
 for f in /sys/class/mtd/mtd*/flags; do
