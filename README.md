@@ -33,6 +33,14 @@ sudo mokutil --import /var/lib/shim-signed/mok/MOK.der
 
 Einmal-Passwort festlegen, neu starten. Im blauen MOK-Manager schnell eine Taste drücken (er wartet nur ~10 s), dann **Enroll MOK → Continue → Yes**, Passwort eingeben, **Reboot**.
 
+### Deinstallation
+
+```bash
+sudo ./install.sh --uninstall
+```
+
+Das entfernt DKMS-Modul (samt `/usr/src/fujitsu-fext-extra-<Version>`), die Datei in `/etc/modules-load.d/`, die udev-Regel und den WLAN-Wächter samt Dienst. Die ASPM-Abschaltung für die 7260 bleibt bis zum nächsten Neustart bestehen. Die optionalen Blacklist-Dateien (siehe unten) werden dabei nicht angefasst.
+
 ## Treiber `fujitsu-fext-extra`
 
 Ruft die Firmware-Schnittstelle `\_SB.FEXT.FUNC` (ACPI FUJ02E3) direkt auf und ergänzt so `fujitsu_laptop` (Hotkeys, LEDs, Ladegrenze), ohne dessen ACPI-Gerät zu übernehmen.

@@ -39,8 +39,14 @@ journalctl -k -f -n0 -o cat | grep --line-buffered -E "$PAT" | while read -r lin
   (( now - last < 120 )) && continue
   last=$now
   if (( tries >= MAX_TRIES )); then
-    echo "Schon $tries erfolglose Resets, ueberspringe: $line"
-    continue
+    # Karte inzwischen wieder da (manuell, Suspend/Resume)? Dann neu zaehlen.
+    if [ -n "$(iface_of "$DEV")" ]; then
+      echo "$(iface_of "$DEV") wieder da, setze Zaehler zurueck"
+      tries=0
+    else
+      echo "Schon $tries erfolglose Resets, ueberspringe: $line"
+      continue
+    fi
   fi
   tries=$((tries + 1))
   echo "Absturz erkannt ($line) -> PCI-Reset $DEV, Versuch $tries/$MAX_TRIES"
@@ -60,3 +66,7 @@ journalctl -k -f -n0 -o cat | grep --line-buffered -E "$PAT" | while read -r lin
     [ -n "$IFACE" ] && { echo "$IFACE nach Modul-Reload wieder da"; tries=0; }
   fi
 done
+# Nur erreicht, wenn der Kernel-Log-Strom endet (journalctl beendet): mit
+# Fehlerstatus aus, damit systemd (Restart=on-failure) den Waechter neu startet.
+echo "Kernel-Log-Strom beendet, Waechter beendet sich"
+exit 1

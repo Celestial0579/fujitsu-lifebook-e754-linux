@@ -43,7 +43,7 @@ Fujitsu führt **„LIFEBOOK E754“** und **„LIFEBOOK E754 vPro“** als getr
 
 ## Intel ME / AMT
 
-**Problem:** Die ME 9.0.22 ist von INTEL-SA-00075 betroffen, einer Rechteausweitung in AMT, die in der CISA-Liste der aktiv ausgenutzten Lücken steht. Behobene Builds haben eine vierstellige Buildnummer, die mit **3** beginnt.
+**Problem:** Die ME 9.0.22 ist von INTEL-SA-00075 betroffen, einer Rechteausweitung in AMT, die in der CISA-Liste der aktiv ausgenutzten Lücken steht. Behobene Builds haben eine vierstellige Buildnummer, die mit **3** beginnt; für die 9.1er-Reihe nennt Intel ab 9.1.41.3024 den behobenen Stand (das Statusskript wertet 9.1.41–9.1.44 mit Build 3xxx entsprechend als behoben), empfohlen bleibt 9.1.45.3000.
 
 **Schnelle Abhilfe ohne Flash:**
 

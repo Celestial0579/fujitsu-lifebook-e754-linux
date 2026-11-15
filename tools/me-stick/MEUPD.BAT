@@ -36,7 +36,7 @@ goto ende
 echo FEHLER > \ME\ERGEBNIS.TXT
 echo.
 echo !!! ME-Update mit Fehler beendet. Rechner NICHT ausschalten, !!!
-echo !!! Foto vom Bildschirm machen und Claude zeigen.             !!!
+echo !!! Foto vom Bildschirm machen, Issue im Repo anlegen.      !!!
 goto ende
 :nichtlesbar
 echo NICHTLESBAR > \ME\ERGEBNIS.TXT

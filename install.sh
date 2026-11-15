@@ -1,11 +1,29 @@
 #!/bin/bash
 # Installiert fujitsu-fext-extra (DKMS) und optional die Intel-7260-WLAN-Fixes.
 # Aufruf: sudo ./install.sh [--no-wifi]
+#         sudo ./install.sh --uninstall   (entfernt alles, was dieses Skript angelegt hat)
 set -euo pipefail
 cd "$(dirname "$0")"
 [ "$(id -u)" = 0 ] || { echo "Bitte mit sudo ausfuehren."; exit 1; }
 
 NAME=fujitsu-fext-extra
+
+if [ "${1:-}" = "--uninstall" ]; then
+  systemctl disable --now iwlwifi-watchdog.service 2>/dev/null || true
+  rm -f /etc/systemd/system/iwlwifi-watchdog.service /usr/local/sbin/iwlwifi-watchdog.sh
+  systemctl daemon-reload
+  rm -f /etc/udev/rules.d/80-iwlwifi-7260-no-aspm.rules
+  udevadm control --reload
+  rm -f "/etc/modules-load.d/$NAME.conf"
+  modprobe -r fujitsu_fext_extra 2>/dev/null || true
+  for old in $(dkms status "$NAME" 2>/dev/null | sed -n "s|^$NAME/\([0-9.]*\)[,:].*|\1|p" | sort -u); do
+    dkms remove "$NAME/$old" --all >/dev/null 2>&1 || true
+    rm -rf "/usr/src/$NAME-$old"
+  done
+  echo "Entfernt. Die ASPM-Abschaltung fuer die 7260 gilt bis zum Neustart weiter."
+  echo "Blacklist-Dateien in /etc/modprobe.d/ (falls installiert) bitte von Hand loeschen."
+  exit 0
+fi
 VER=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"/\1/p' $NAME/dkms.conf)
 [[ "$VER" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "Ungueltige Version in dkms.conf: '$VER'"; exit 1; }
 

@@ -34,8 +34,8 @@ fi
 ver=$(head -1 /sys/class/mei/mei0/fw_ver 2>/dev/null)
 if [ -n "$ver" ]; then
   case "$ver" in
-    *:9.1.4[5-9].3*|*:9.1.[5-9]*) ok "ME-Firmware $ver (INTEL-SA-00075 behoben)";;
-    *) warn "ME-Firmware $ver: INTEL-SA-00075 offen (behobene Builds beginnen mit 3, z.B. 9.1.45.3000)";;
+    *:9.1.4[1-9].3*|*:9.1.[5-9]*) ok "ME-Firmware $ver (INTEL-SA-00075 behoben)";;
+    *) warn "ME-Firmware $ver: INTEL-SA-00075 offen (behoben ab 9.1.41.3024: Build beginnt mit 3; empfohlen 9.1.45.3000)";;
   esac
 else
   info "ME-Version nicht lesbar (mei-Treiber gesperrt oder nicht geladen)"
