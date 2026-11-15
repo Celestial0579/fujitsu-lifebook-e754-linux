@@ -52,6 +52,10 @@ struct fext_extra {
 	unsigned long sens_stamp;
 	bool sens_queried;		/* sens_stamp/sens_err gueltig */
 	int sens_err;			/* Ergebnis der letzten Abfrage, auch gecacht */
+	unsigned long pwr_stamp;
+	bool pwr_queried;		/* pwr_stamp/pwr_val/pwr_err gueltig */
+	int pwr_err;			/* Ergebnis der letzten S005-Abfrage */
+	u32 pwr_val;			/* letzter S005-Zustand (Bit gesetzt = aus) */
 	u32 tacho, temp, tctrl;
 	bool curve_valid;
 	u8 curve[EC_CURVE_N][2];	/* [i][0] = Grad C, [i][1] = Stellwert */
@@ -239,16 +243,35 @@ static DEVICE_ATTR_RO(fan_curve);
 #define PWR_BAY		BIT(0)		/* BYCI: Modulschacht (SATA-Bay) */
 #define PWR_BT		BIT(10)		/* BTCI: Bluetooth */
 
-/* S005(1, mask, value): Bit gesetzt = Geraet AUS. Mit mask=0 reine Abfrage. */
+/*
+ * S005(1, mask, value): Bit gesetzt = Geraet AUS. Mit mask=0 reine Abfrage.
+ *
+ * Die Attribute sind fuer alle lesbar. Wie die Sensoren wird der Zustand daher
+ * hoechstens einmal je EC_CACHE_MS abgefragt (auch ein Fehler), sonst koennte ein
+ * unprivilegierter Nutzer per Leseschleife die serialisierte AML-Methode FUNC
+ * dauerhaft belegen. Ein erfolgreiches Schalten aktualisiert den Cache.
+ */
 static ssize_t power_show(struct device *dev, char *buf, u32 bit)
 {
 	struct fext_extra *fx = dev_get_drvdata(dev);
-	u32 v;
-	int ret = fext_call(fx, FUNC_POWER, 1, 0, 0, &v);
+	u32 v = 0;
+	ssize_t ret;
 
-	if (ret)
-		return ret;
-	return sysfs_emit(buf, "%d\n", !(v & bit));
+	mutex_lock(&fx->lock);
+	if (!fx->pwr_queried ||
+	    !time_before(jiffies, fx->pwr_stamp + msecs_to_jiffies(EC_CACHE_MS))) {
+		fx->pwr_err = fext_call(fx, FUNC_POWER, 1, 0, 0, &v);
+		if (!fx->pwr_err)
+			fx->pwr_val = v;
+		fx->pwr_stamp = jiffies;
+		fx->pwr_queried = true;
+	}
+	if (fx->pwr_err)
+		ret = fx->pwr_err;
+	else
+		ret = sysfs_emit(buf, "%d\n", !(fx->pwr_val & bit));
+	mutex_unlock(&fx->lock);
+	return ret;
 }
 
 static ssize_t power_store(struct device *dev, const char *buf, size_t count, u32 bit)
@@ -260,7 +283,16 @@ static ssize_t power_store(struct device *dev, const char *buf, size_t count, u3
 
 	if (ret)
 		return ret;
+	mutex_lock(&fx->lock);
 	ret = fext_call(fx, FUNC_POWER, 1, bit, on ? 0 : bit, &v);
+	/* Nach dem Schalten gilt der zurueckgelieferte Zustand (oder gar keiner). */
+	fx->pwr_queried = !ret;
+	if (!ret) {
+		fx->pwr_val = v;
+		fx->pwr_err = 0;
+		fx->pwr_stamp = jiffies;
+	}
+	mutex_unlock(&fx->lock);
 	if (ret)
 		return ret;
 	/*
