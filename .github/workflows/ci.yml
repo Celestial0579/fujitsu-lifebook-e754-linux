@@ -82,7 +82,8 @@ jobs:
           grep -q 'ACTION=="add|bind"' 80-iwlwifi-7260-no-aspm.rules
           udevadm verify 80-iwlwifi-7260-no-aspm.rules
           # Bekannte, hier nicht behebbare Meldungen herausfiltern (das Skript
-          # liegt im Repo, nicht unter /usr/local/sbin); alles andere ist ein Fehler.
+          # liegt im Repo, nicht unter /usr/local/sbin); alles andere zur Unit ist ein Fehler
+          # (Meldungen zu fremden System-Units des Runners zaehlen nicht).
           rest=$(systemd-analyze verify --man=no iwlwifi-watchdog.service 2>&1 \
-            | grep -v 'is not executable\|No such file' || true)
+            | grep 'iwlwifi-watchdog' | grep -v 'is not executable\|No such file' || true)
           [ -z "$rest" ] || { echo "$rest"; exit 1; }
