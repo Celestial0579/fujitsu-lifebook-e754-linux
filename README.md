@@ -25,6 +25,8 @@ sudo ./install.sh --no-wifi  # nur der Treiber
 
 Das Skript installiert das Modul per DKMS, sodass es nach jedem Kernel-Update automatisch neu gebaut wird, und lädt es beim Booten.
 
+**Update:** Dasselbe Kommando (`git pull`, dann `sudo ./install.sh`) aktualisiert auch ein schon installiertes Modul. Das Skript entlädt die laufende Fassung und lädt die neue. Lässt sie sich nicht entladen, weil sie in Benutzung ist, weist es auf den nötigen Neustart hin. Welche Fassung läuft, steht unter `/sys/module/fujitsu_fext_extra/version` (`modinfo fujitsu_fext_extra` zeigt die installierte).
+
 **Secure Boot:** DKMS signiert das Modul mit einem eigenen Schlüssel. Diesen musst du einmal eintragen:
 
 ```bash

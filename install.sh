@@ -63,14 +63,6 @@ if [ "${1:-}" != "--no-wifi" ] && has_7260; then
   systemctl restart iwlwifi-watchdog.service   # bei Upgrade die neue Version starten
 fi
 
-if modprobe fujitsu_fext_extra 2>/dev/null; then
-  echo "OK: Modul geladen -> /sys/devices/platform/fujitsu-fext-extra"
-elif mokutil --sb-state 2>/dev/null | grep -q enabled; then
-  echo
-  echo "Secure Boot ist aktiv und der DKMS-Schluessel noch nicht eingetragen:"
-  echo "  sudo mokutil --import /var/lib/shim-signed/mok/MOK.der"
-  echo "Einmal-Passwort festlegen, neu starten, im blauen MOK-Manager 'Enroll MOK' waehlen."
-else
-  echo "Modul konnte nicht geladen werden, siehe: sudo dmesg | tail"
-  exit 1
-fi
+# shellcheck source=modul-laden.sh
+. ./modul-laden.sh
+modul_laden "$VER"
