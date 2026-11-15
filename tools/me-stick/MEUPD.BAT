@@ -16,6 +16,8 @@ if "%MEFAIL%"=="1" goto nichtlesbar
 echo.
 choice /C:JN Jetzt die ME-Firmware flashen
 if errorlevel 2 goto abbruch
+REM geflasht wird nur bei genau 1 (J); CHOICE liefert nach Strg+C 0
+if not errorlevel 1 goto abbruch
 echo.
 echo Starte Update, das dauert einige Minuten ...
 \ME\FWUPDLCL.EXE -f \ME\ME91_5M.BIN
