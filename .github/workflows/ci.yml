@@ -26,6 +26,9 @@ jobs:
     env:
       DEBIAN_FRONTEND: noninteractive
       SPARSE_TAG: v0.6.4
+      # Commit, auf den v0.6.4 zeigt (git.kernel.org und kernel.googlesource.com stimmen ueberein, geprueft 2026-11-20).
+      # Tags lassen sich verschieben, der Commit nicht.
+      SPARSE_COMMIT: c4706aa764f3ae68258ba60be6325a5662900362
     steps:
       - name: Pakete installieren
         run: |
@@ -34,6 +37,8 @@ jobs:
             build-essential linux-headers-generic git ca-certificates perl \
             libelf-dev kmod
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: pipefail ist aktiv (Regressionsprüfung zu #10)
         run: |
           if (false | cat); then echo "::error::Pipes ohne pipefail: ein scheiternder Build bliebe gruen"; exit 1; fi
@@ -59,6 +64,7 @@ jobs:
             echo "::warning::Klonen von $url fehlgeschlagen"; sleep 10
           done
           test -f /tmp/sparse/Makefile
+          test "$(git -C /tmp/sparse rev-parse HEAD)" = "$SPARSE_COMMIT" || { echo "::error::sparse ${SPARSE_TAG} zeigt nicht auf den erwarteten Commit"; exit 1; }
           make -C /tmp/sparse -j"$(nproc)" -s sparse
 
       - name: sparse-Prüfung
@@ -80,6 +86,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Syntax
         run: |
           bash -n install.sh
