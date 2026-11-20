@@ -5,5 +5,21 @@ After=systemd-journald.service
 ExecStart=/usr/local/sbin/iwlwifi-watchdog.sh
 Restart=on-failure
 RestartSec=5
+# Haertung (Issue #17). Bewusst NICHT gesetzt: PrivateNetwork (systemd haengt dann ein eigenes /sys ein, das
+# Netzwerk-Interface der Karte waere fuer iface_of() unsichtbar), ProtectKernelModules/-Tunables (modprobe und
+# Schreiben nach /sys/bus/pci/.../remove und /rescan), eine enge CapabilityBoundingSet (nicht am Geraet geprueft).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
 [Install]
 WantedBy=multi-user.target
